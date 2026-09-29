@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Download, FileText, KeyRound, Shield, X } from "lucide-react";
+import { Check, Download, FileText, KeyRound, Shield, Users, X, ChevronRight, Clock, Activity } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { api, ApiError, API_URL, getToken } from "@/lib/api";
@@ -26,6 +26,21 @@ type AdminUser = {
 
 function toDateInputValue(iso: string) {
   return iso.slice(0, 10);
+}
+
+function StatCard({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string | number; sub?: string }) {
+  return (
+    <div className="rounded-xl border border-ink-200 bg-white p-4 dark:border-ink-800 dark:bg-ink-900">
+      <div className="flex items-center justify-between">
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+          {icon}
+        </span>
+      </div>
+      <p className="mt-3 text-2xl font-bold text-ink-900 dark:text-ink-100">{value}</p>
+      <p className="text-xs font-medium text-ink-500">{label}</p>
+      {sub && <p className="mt-0.5 text-xs text-ink-400">{sub}</p>}
+    </div>
+  );
 }
 
 export function AdminDashboard() {
@@ -55,175 +70,222 @@ export function AdminDashboard() {
 
   const selectedUser = users?.find((u) => u.id === selectedUserId) ?? null;
 
+  const totalUsers = users?.length ?? 0;
+  const verifiedUsers = users?.filter((u) => u.email_verified).length ?? 0;
+  const totalGenerated = users?.reduce((s, u) => s + u.generation_count, 0) ?? 0;
+  const expiredTrials = users?.filter((u) => u.trial_expired).length ?? 0;
+
   return (
     <div className="min-h-screen bg-ink-50 dark:bg-ink-950">
-      <header className="flex items-center justify-between border-b border-ink-200 bg-white px-6 py-4 dark:border-ink-800 dark:bg-ink-900">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white">
-            TX
+      {/* Header */}
+      <header className="sticky top-0 z-30 border-b border-ink-200 bg-white/80 backdrop-blur dark:border-ink-800 dark:bg-ink-900/80">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-sm font-bold text-white">
+              TX
+            </div>
+            <div>
+              <p className="text-sm font-semibold leading-tight text-ink-900 dark:text-ink-100">TenderX Admin</p>
+              <p className="text-[11px] leading-tight text-ink-400">{user?.email}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-semibold leading-tight text-ink-900 dark:text-ink-100">Admin Dashboard</p>
-            <p className="text-xs leading-tight text-ink-500">{user?.email}</p>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/billing"
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-100 dark:text-ink-300 dark:hover:bg-ink-800"
+            >
+              Billing
+            </Link>
+            <button
+              onClick={logout}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-ink-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+            >
+              Log Out
+            </button>
           </div>
-        </div>
-        <div className="flex items-center gap-4">
-          <Link href="/billing" className="text-xs font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400">
-            Billing
-          </Link>
-          <button onClick={logout} className="text-xs font-medium text-ink-500 hover:text-red-500">
-            Log Out
-          </button>
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl p-6">
-        <h1 className="text-lg font-semibold text-ink-900 dark:text-ink-100">Users</h1>
-        <p className="mt-1 text-sm text-ink-500">Verify accounts, manage trial periods, and act on a user's data.</p>
+      <main className="mx-auto max-w-7xl space-y-6 p-6">
+        {/* Page title */}
+        <div>
+          <h1 className="text-xl font-bold text-ink-900 dark:text-ink-100">Users</h1>
+          <p className="mt-0.5 text-sm text-ink-500">Verify accounts, manage trial periods, and act on user data.</p>
+        </div>
 
-        <div className="mt-4 overflow-x-auto rounded-xl border border-ink-200 bg-white dark:border-ink-800 dark:bg-ink-900">
-          <table className="w-full min-w-[920px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-ink-100 text-xs uppercase tracking-wide text-ink-400 dark:border-ink-800">
-                <th className="px-4 py-3 font-medium">User</th>
-                <th className="px-4 py-3 font-medium">Verified</th>
-                <th className="px-4 py-3 font-medium">Trial ends</th>
-                <th className="px-4 py-3 font-medium">Generated</th>
-                <th className="px-4 py-3 font-medium">Partner Access</th>
-                <th className="px-4 py-3 font-medium">Admin</th>
-                <th className="px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-ink-400">
-                    Loading…
-                  </td>
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatCard icon={<Users size={18} />} label="Total Users" value={totalUsers} />
+          <StatCard icon={<Check size={18} />} label="Verified" value={verifiedUsers} sub={`${totalUsers - verifiedUsers} unverified`} />
+          <StatCard icon={<Activity size={18} />} label="Docs Generated" value={totalGenerated} />
+          <StatCard icon={<Clock size={18} />} label="Expired Trials" value={expiredTrials} />
+        </div>
+
+        {/* Users table */}
+        <div className="overflow-hidden rounded-xl border border-ink-200 bg-white shadow-sm dark:border-ink-800 dark:bg-ink-900">
+          <div className="border-b border-ink-100 px-5 py-3.5 dark:border-ink-800">
+            <p className="text-sm font-semibold text-ink-800 dark:text-ink-200">All Users</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-ink-100 dark:border-ink-800">
+                  <th className="px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">User</th>
+                  <th className="px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Status</th>
+                  <th className="px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Trial Ends</th>
+                  <th className="px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Docs</th>
+                  <th className="px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Permissions</th>
+                  <th className="px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Role</th>
+                  <th className="px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-ink-400">Actions</th>
                 </tr>
-              )}
-              {(users ?? []).map((u) => (
-                <tr key={u.id} className="border-b border-ink-100 last:border-0 dark:border-ink-800">
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => setSelectedUserId(u.id)}
-                      className="text-left font-medium text-ink-900 hover:text-brand-600 dark:text-ink-100 dark:hover:text-brand-400"
-                    >
-                      {u.full_name || u.email}
-                    </button>
-                    <p className="text-xs text-ink-400">{u.email}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => updateUser.mutate({ id: u.id, payload: { email_verified: !u.email_verified } })}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors ${
-                        u.email_verified
-                          ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400"
-                          : "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400"
-                      }`}
-                      title="Click to toggle"
-                    >
-                      {u.email_verified ? <Check size={12} /> : <X size={12} />}
-                      {u.email_verified ? "Verified" : "Unverified"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        defaultValue={toDateInputValue(u.trial_ends_at)}
-                        onBlur={(e) => {
-                          if (!e.target.value) return;
-                          updateUser.mutate({ id: u.id, payload: { trial_ends_at: `${e.target.value}T00:00:00` } });
-                        }}
-                        className={`h-7 rounded-md border px-1.5 text-xs outline-none focus:border-brand-500 ${
-                          u.trial_expired
-                            ? "border-red-300 text-red-500 dark:border-red-800"
-                            : "border-ink-200 text-ink-600 dark:border-ink-700 dark:text-ink-300"
-                        } bg-white dark:bg-ink-950`}
-                      />
-                      <button
-                        onClick={() => updateUser.mutate({ id: u.id, payload: { extend_trial_days: 30 } })}
-                        className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
-                      >
-                        +30d
-                      </button>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => setSelectedUserId(u.id)}
-                      className="inline-flex items-center gap-1 text-ink-600 hover:text-brand-600 dark:text-ink-300 dark:hover:text-brand-400"
-                    >
-                      <FileText size={13} /> {u.generation_count}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      <PermissionChip
-                        label="1st Partner"
-                        checked={u.can_use_first_partner}
-                        onToggle={() =>
-                          updateUser.mutate({ id: u.id, payload: { can_use_first_partner: !u.can_use_first_partner } })
-                        }
-                      />
-                      <PermissionChip
-                        label="2nd Partner"
-                        checked={u.can_use_second_partner}
-                        onToggle={() =>
-                          updateUser.mutate({ id: u.id, payload: { can_use_second_partner: !u.can_use_second_partner } })
-                        }
-                      />
-                      <PermissionChip
-                        label="Sig/Stamp"
-                        checked={u.can_upload_signature_stamp}
-                        onToggle={() =>
-                          updateUser.mutate({
-                            id: u.id,
-                            payload: { can_upload_signature_stamp: !u.can_upload_signature_stamp },
-                          })
-                        }
-                      />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => updateUser.mutate({ id: u.id, payload: { is_admin: !u.is_admin } })}
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-                        u.is_admin
-                          ? "bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-400"
-                          : "bg-ink-100 text-ink-500 dark:bg-ink-800"
-                      }`}
-                    >
-                      <Shield size={12} /> {u.is_admin ? "Admin" : "User"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
+              </thead>
+              <tbody className="divide-y divide-ink-100 dark:divide-ink-800">
+                {isLoading && (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-ink-400">
+                      Loading users…
+                    </td>
+                  </tr>
+                )}
+                {(users ?? []).map((u) => (
+                  <tr
+                    key={u.id}
+                    className={`group transition-colors hover:bg-ink-50/60 dark:hover:bg-ink-800/40 ${
+                      selectedUserId === u.id ? "bg-brand-50/40 dark:bg-brand-500/5" : ""
+                    }`}
+                  >
+                    {/* User */}
+                    <td className="px-5 py-3.5">
                       <button
                         onClick={() => setSelectedUserId(u.id)}
-                        className="text-xs font-medium text-brand-600 hover:underline dark:text-brand-400"
+                        className="flex items-center gap-2.5 text-left"
                       >
-                        View data
+                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
+                          {(u.full_name || u.email).charAt(0).toUpperCase()}
+                        </span>
+                        <span>
+                          <span className="block font-medium text-ink-900 group-hover:text-brand-600 dark:text-ink-100 dark:group-hover:text-brand-400">
+                            {u.full_name || u.email}
+                          </span>
+                          <span className="block text-xs text-ink-400">{u.email}</span>
+                        </span>
                       </button>
+                    </td>
+
+                    {/* Verified */}
+                    <td className="px-5 py-3.5">
                       <button
-                        onClick={() => {
-                          if (confirm(`Reset the password for ${u.email}? A new password will be generated.`)) {
-                            resetPassword.mutate(u.id);
-                          }
-                        }}
-                        disabled={resetPassword.isPending}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-ink-500 hover:text-ink-700 disabled:opacity-50 dark:text-ink-400 dark:hover:text-ink-200"
-                        title="Reset password"
+                        onClick={() => updateUser.mutate({ id: u.id, payload: { email_verified: !u.email_verified } })}
+                        title="Click to toggle"
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                          u.email_verified
+                            ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400"
+                            : "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400"
+                        }`}
                       >
-                        <KeyRound size={12} /> Reset
+                        {u.email_verified ? <Check size={11} /> : <X size={11} />}
+                        {u.email_verified ? "Verified" : "Unverified"}
                       </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </td>
+
+                    {/* Trial */}
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="date"
+                          defaultValue={toDateInputValue(u.trial_ends_at)}
+                          onBlur={(e) => {
+                            if (!e.target.value) return;
+                            updateUser.mutate({ id: u.id, payload: { trial_ends_at: `${e.target.value}T00:00:00` } });
+                          }}
+                          className={`h-7 rounded-md border px-1.5 text-xs outline-none focus:border-brand-500 ${
+                            u.trial_expired
+                              ? "border-red-300 text-red-500 dark:border-red-800"
+                              : "border-ink-200 text-ink-600 dark:border-ink-700 dark:text-ink-300"
+                          } bg-white dark:bg-ink-950`}
+                        />
+                        <button
+                          onClick={() => updateUser.mutate({ id: u.id, payload: { extend_trial_days: 30 } })}
+                          className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-semibold text-brand-700 hover:bg-brand-100 dark:bg-brand-500/10 dark:text-brand-400"
+                        >
+                          +30d
+                        </button>
+                      </div>
+                    </td>
+
+                    {/* Docs */}
+                    <td className="px-5 py-3.5">
+                      <button
+                        onClick={() => setSelectedUserId(u.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-ink-100 px-2.5 py-1 text-xs font-semibold text-ink-700 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-300"
+                      >
+                        <FileText size={12} />
+                        {u.generation_count}
+                      </button>
+                    </td>
+
+                    {/* Permissions */}
+                    <td className="px-5 py-3.5">
+                      <div className="flex flex-wrap gap-1">
+                        <PermissionChip
+                          label="1st Partner"
+                          checked={u.can_use_first_partner}
+                          onToggle={() => updateUser.mutate({ id: u.id, payload: { can_use_first_partner: !u.can_use_first_partner } })}
+                        />
+                        <PermissionChip
+                          label="2nd Partner"
+                          checked={u.can_use_second_partner}
+                          onToggle={() => updateUser.mutate({ id: u.id, payload: { can_use_second_partner: !u.can_use_second_partner } })}
+                        />
+                        <PermissionChip
+                          label="Sig/Stamp"
+                          checked={u.can_upload_signature_stamp}
+                          onToggle={() => updateUser.mutate({ id: u.id, payload: { can_upload_signature_stamp: !u.can_upload_signature_stamp } })}
+                        />
+                      </div>
+                    </td>
+
+                    {/* Admin toggle */}
+                    <td className="px-5 py-3.5">
+                      <button
+                        onClick={() => updateUser.mutate({ id: u.id, payload: { is_admin: !u.is_admin } })}
+                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                          u.is_admin
+                            ? "bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-500/10 dark:text-brand-400"
+                            : "bg-ink-100 text-ink-500 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-400"
+                        }`}
+                      >
+                        <Shield size={11} />
+                        {u.is_admin ? "Admin" : "User"}
+                      </button>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setSelectedUserId(u.id)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-brand-500 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-brand-600"
+                        >
+                          View <ChevronRight size={11} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Reset the password for ${u.email}?`)) resetPassword.mutate(u.id);
+                          }}
+                          disabled={resetPassword.isPending}
+                          title="Reset password"
+                          className="inline-flex items-center gap-1 rounded-lg border border-ink-200 px-2.5 py-1 text-[11px] font-semibold text-ink-500 hover:border-ink-300 hover:text-ink-700 disabled:opacity-50 dark:border-ink-700 dark:hover:text-ink-200"
+                        >
+                          <KeyRound size={11} /> Reset
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </main>
 
@@ -254,6 +316,10 @@ type AdminInvoice = {
   verified_at: string | null;
   created_at: string;
 };
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-ink-400">{children}</p>;
+}
 
 function UserDataPanel({ user, onClose }: { user: AdminUser; onClose: () => void }) {
   const queryClient = useQueryClient();
@@ -328,182 +394,195 @@ function UserDataPanel({ user, onClose }: { user: AdminUser; onClose: () => void
     URL.revokeObjectURL(url);
   }
 
+  const initials = (user.full_name || user.email).charAt(0).toUpperCase();
+
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       <div
         onClick={(e) => e.stopPropagation()}
-        className="flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-ink-200 bg-white p-5 dark:border-ink-800 dark:bg-ink-900"
+        className="relative flex h-full w-full max-w-lg flex-col overflow-y-auto border-l border-ink-200 bg-white shadow-2xl dark:border-ink-800 dark:bg-ink-900"
       >
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold text-ink-900 dark:text-ink-100">{user.full_name || user.email}</h2>
-          <button onClick={onClose} className="text-ink-400 hover:text-ink-600">
-            <X size={18} />
-          </button>
-        </div>
-        <p className="text-xs text-ink-500">{user.email}</p>
-
-        <div className="mt-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Drafts</p>
-          <ul className="mt-2 space-y-2">
-            {(drafts ?? []).map((d) => (
-              <li key={d.id} className="flex items-center justify-between rounded-lg border border-ink-100 px-3 py-2 dark:border-ink-800">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-ink-800 dark:text-ink-200">{d.name}</p>
-                  <p className="text-xs text-ink-400">{new Date(d.updated_at).toLocaleString()}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <Link
-                    href={`/users/${user.id}/drafts/${d.id}`}
-                    className="rounded-lg border border-ink-200 px-2.5 py-1 text-xs font-medium text-ink-600 hover:bg-ink-50 dark:border-ink-700 dark:text-ink-400 dark:hover:bg-ink-800"
-                  >
-                    Edit
-                  </Link>
-                  <button
-                    onClick={() => generate.mutate(d.id)}
-                    disabled={generate.isPending}
-                    className="flex items-center gap-1 rounded-lg bg-brand-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50"
-                  >
-                    <Download size={12} /> Generate
-                  </button>
-                </div>
-              </li>
-            ))}
-            {drafts?.length === 0 && <li className="text-xs text-ink-400">No drafts yet.</li>}
-          </ul>
-        </div>
-
-        <div className="mt-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Subscription</p>
-          <div className="mt-2 flex gap-2">
-            <label className="flex-1">
-              <span className="mb-1 block text-xs text-ink-500">Price (NPR)</span>
-              <input
-                type="number"
-                defaultValue={user.subscription_amount ?? ""}
-                onBlur={(e) => {
-                  const value = e.target.value ? Number(e.target.value) : null;
-                  updateSubscription.mutate({ subscription_amount: value });
-                }}
-                className="h-8 w-full rounded-lg border border-ink-200 bg-white px-2 text-xs outline-none focus:border-brand-500 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100"
-              />
-            </label>
-            <label className="flex-1">
-              <span className="mb-1 block text-xs text-ink-500">Duration (days)</span>
-              <input
-                type="number"
-                defaultValue={user.subscription_duration_days ?? ""}
-                onBlur={(e) => {
-                  const value = e.target.value ? Number(e.target.value) : null;
-                  updateSubscription.mutate({ subscription_duration_days: value });
-                }}
-                className="h-8 w-full rounded-lg border border-ink-200 bg-white px-2 text-xs outline-none focus:border-brand-500 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100"
-              />
-            </label>
+        {/* Panel header */}
+        <div className="sticky top-0 z-10 border-b border-ink-100 bg-white px-5 py-4 dark:border-ink-800 dark:bg-ink-900">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
+              {initials}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-semibold text-ink-900 dark:text-ink-100">{user.full_name || user.email}</p>
+              <p className="truncate text-xs text-ink-400">{user.email}</p>
+            </div>
+            <button onClick={onClose} className="rounded-lg p-1 text-ink-400 hover:bg-ink-100 hover:text-ink-600 dark:hover:bg-ink-800">
+              <X size={16} />
+            </button>
           </div>
-          <button
-            onClick={() => createInvoice.mutate()}
-            disabled={createInvoice.isPending}
-            className="mt-2 h-8 w-full rounded-lg border border-ink-200 text-xs font-medium text-ink-600 hover:bg-ink-50 disabled:opacity-50 dark:border-ink-700 dark:text-ink-400 dark:hover:bg-ink-800"
-          >
-            {createInvoice.isPending ? "Creating…" : "Create Invoice Now"}
-          </button>
+        </div>
 
-          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-ink-400">Payment History</p>
-          <ul className="mt-2 space-y-1.5">
-            {(invoices ?? []).map((inv) => (
-              <li key={inv.id} className="flex items-center justify-between gap-2 rounded-lg border border-ink-100 px-2.5 py-1.5 text-xs dark:border-ink-800">
-                <div className="min-w-0">
-                  <p className="font-medium text-ink-700 dark:text-ink-300">
-                    NPR {inv.amount.toLocaleString()} · {inv.duration_days}d
-                  </p>
-                  <p className="text-ink-400">{new Date(inv.created_at).toLocaleDateString()}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 ${
-                      inv.status === "verified"
-                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
-                        : inv.status === "rejected"
-                          ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
-                          : inv.status === "submitted"
-                            ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
-                            : "bg-ink-100 text-ink-500 dark:bg-ink-800"
-                    }`}
-                  >
-                    {inv.status}
-                  </span>
-                  {inv.status === "submitted" && (
-                    <button
-                      onClick={() => verifyInvoice.mutate(inv.id)}
-                      className="font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+        <div className="flex flex-col gap-6 p-5">
+          {/* Drafts */}
+          <section>
+            <SectionLabel>Drafts ({drafts?.length ?? 0})</SectionLabel>
+            <ul className="space-y-2">
+              {(drafts ?? []).map((d) => (
+                <li key={d.id} className="flex items-center justify-between rounded-xl border border-ink-100 px-3.5 py-2.5 dark:border-ink-800">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-ink-800 dark:text-ink-200">{d.name}</p>
+                    <p className="text-[11px] text-ink-400">{new Date(d.updated_at).toLocaleString()}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Link
+                      href={`/users/${user.id}/drafts/${d.id}`}
+                      className="rounded-lg border border-ink-200 px-2.5 py-1 text-xs font-medium text-ink-600 hover:bg-ink-50 dark:border-ink-700 dark:text-ink-400 dark:hover:bg-ink-800"
                     >
-                      Verify
+                      Edit
+                    </Link>
+                    <button
+                      onClick={() => generate.mutate(d.id)}
+                      disabled={generate.isPending}
+                      className="flex items-center gap-1 rounded-lg bg-brand-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+                    >
+                      <Download size={12} /> Generate
                     </button>
-                  )}
-                </div>
-              </li>
-            ))}
-            {invoices?.length === 0 && <li className="text-xs text-ink-400">No invoices yet.</li>}
-          </ul>
-        </div>
+                  </div>
+                </li>
+              ))}
+              {drafts?.length === 0 && <li className="text-xs text-ink-400">No drafts yet.</li>}
+            </ul>
+          </section>
 
-        <div className="mt-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">
-            Generation History {history ? `(${history.total})` : ""}
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            {(history?.items ?? []).map((item) => (
-              <li key={item.id} className="flex items-center justify-between gap-2 text-xs">
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-ink-700 dark:text-ink-300">{item.jv_name || item.filename}</p>
-                  <p className="text-ink-400">{new Date(item.created_at).toLocaleString()}</p>
-                </div>
-                <button
-                  onClick={() => downloadFile(item.download_url, item.filename)}
-                  className="shrink-0 text-brand-600 hover:text-brand-700 dark:text-brand-400"
-                >
-                  <Download size={13} />
-                </button>
-              </li>
-            ))}
-            {history?.items.length === 0 && <li className="text-xs text-ink-400">No documents generated yet.</li>}
-          </ul>
-        </div>
+          {/* Subscription */}
+          <section>
+            <SectionLabel>Subscription</SectionLabel>
+            <div className="rounded-xl border border-ink-100 p-4 dark:border-ink-800">
+              <div className="flex gap-3">
+                <label className="flex-1">
+                  <span className="mb-1 block text-xs text-ink-500">Price (NPR)</span>
+                  <input
+                    type="number"
+                    defaultValue={user.subscription_amount ?? ""}
+                    onBlur={(e) => {
+                      const value = e.target.value ? Number(e.target.value) : null;
+                      updateSubscription.mutate({ subscription_amount: value });
+                    }}
+                    className="h-8 w-full rounded-lg border border-ink-200 bg-white px-2.5 text-sm outline-none focus:border-brand-500 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100"
+                  />
+                </label>
+                <label className="flex-1">
+                  <span className="mb-1 block text-xs text-ink-500">Duration (days)</span>
+                  <input
+                    type="number"
+                    defaultValue={user.subscription_duration_days ?? ""}
+                    onBlur={(e) => {
+                      const value = e.target.value ? Number(e.target.value) : null;
+                      updateSubscription.mutate({ subscription_duration_days: value });
+                    }}
+                    className="h-8 w-full rounded-lg border border-ink-200 bg-white px-2.5 text-sm outline-none focus:border-brand-500 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100"
+                  />
+                </label>
+              </div>
+              <button
+                onClick={() => createInvoice.mutate()}
+                disabled={createInvoice.isPending}
+                className="mt-3 h-8 w-full rounded-lg bg-brand-500 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+              >
+                {createInvoice.isPending ? "Creating…" : "Create Invoice"}
+              </button>
+            </div>
+          </section>
 
-        <div className="mt-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-ink-400">Partner Profiles</p>
-          <ul className="mt-2 space-y-1">
-            {(profiles ?? []).map((p) => (
-              <li key={p.id} className="text-sm text-ink-700 dark:text-ink-300">
-                {p.name} <span className="text-xs text-ink-400">({p.partner_name})</span>
-              </li>
-            ))}
-            {profiles?.length === 0 && <li className="text-xs text-ink-400">No saved profiles yet.</li>}
-          </ul>
+          {/* Payment history */}
+          <section>
+            <SectionLabel>Payment History</SectionLabel>
+            <ul className="space-y-1.5">
+              {(invoices ?? []).map((inv) => (
+                <li key={inv.id} className="flex items-center justify-between gap-2 rounded-xl border border-ink-100 px-3.5 py-2.5 text-xs dark:border-ink-800">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-ink-700 dark:text-ink-300">
+                      NPR {inv.amount.toLocaleString()} · {inv.duration_days}d
+                    </p>
+                    <p className="text-[11px] text-ink-400">{new Date(inv.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        inv.status === "verified"
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+                          : inv.status === "rejected"
+                            ? "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400"
+                            : inv.status === "submitted"
+                              ? "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400"
+                              : "bg-ink-100 text-ink-500 dark:bg-ink-800"
+                      }`}
+                    >
+                      {inv.status}
+                    </span>
+                    {inv.status === "submitted" && (
+                      <button
+                        onClick={() => verifyInvoice.mutate(inv.id)}
+                        className="font-semibold text-emerald-600 hover:underline dark:text-emerald-400"
+                      >
+                        Verify
+                      </button>
+                    )}
+                  </div>
+                </li>
+              ))}
+              {invoices?.length === 0 && <li className="text-xs text-ink-400">No invoices yet.</li>}
+            </ul>
+          </section>
+
+          {/* Generation history */}
+          <section>
+            <SectionLabel>Generation History {history ? `(${history.total})` : ""}</SectionLabel>
+            <ul className="space-y-1.5">
+              {(history?.items ?? []).map((item) => (
+                <li key={item.id} className="flex items-center justify-between gap-2 rounded-xl border border-ink-100 px-3.5 py-2.5 dark:border-ink-800">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-medium text-ink-700 dark:text-ink-300">{item.jv_name || item.filename}</p>
+                    <p className="text-[11px] text-ink-400">{new Date(item.created_at).toLocaleString()}</p>
+                  </div>
+                  <button
+                    onClick={() => downloadFile(item.download_url, item.filename)}
+                    className="shrink-0 rounded-lg p-1.5 text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
+                  >
+                    <Download size={14} />
+                  </button>
+                </li>
+              ))}
+              {history?.items.length === 0 && <li className="text-xs text-ink-400">No documents generated yet.</li>}
+            </ul>
+          </section>
+
+          {/* Partner profiles */}
+          <section>
+            <SectionLabel>Saved Partner Profiles ({profiles?.length ?? 0})</SectionLabel>
+            <ul className="space-y-1">
+              {(profiles ?? []).map((p) => (
+                <li key={p.id} className="flex items-center justify-between rounded-xl border border-ink-100 px-3.5 py-2 dark:border-ink-800">
+                  <p className="text-sm font-medium text-ink-700 dark:text-ink-300">{p.name}</p>
+                  <span className="rounded-full bg-ink-100 px-2 py-0.5 text-[11px] text-ink-500 dark:bg-ink-800">{p.partner_name}</span>
+                </li>
+              ))}
+              {profiles?.length === 0 && <li className="text-xs text-ink-400">No saved profiles yet.</li>}
+            </ul>
+          </section>
         </div>
       </div>
     </div>
   );
 }
 
-function PermissionChip({
-  label,
-  checked,
-  onToggle,
-}: {
-  label: string;
-  checked: boolean;
-  onToggle: () => void;
-}) {
+function PermissionChip({ label, checked, onToggle }: { label: string; checked: boolean; onToggle: () => void }) {
   return (
     <button
       onClick={onToggle}
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors ${
+      title="Click to toggle"
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold transition-colors ${
         checked
           ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400"
           : "bg-ink-100 text-ink-500 hover:bg-ink-200 dark:bg-ink-800 dark:text-ink-400"
       }`}
-      title="Click to toggle"
     >
       {checked ? <Check size={10} /> : <X size={10} />}
       {label}
