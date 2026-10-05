@@ -1,9 +1,10 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Download, FileText, KeyRound, Shield, Users, X, ChevronRight, Clock, Activity } from "lucide-react";
+import { Check, Download, FileText, KeyRound, Shield, Trash2, Users, X, ChevronRight, Clock, Activity } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { useConfirm } from "@/components/ui/ConfirmDialog";
 import { api, ApiError, API_URL, getToken } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -47,6 +48,7 @@ export function AdminDashboard() {
   const { user, logout } = useAuth();
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["admin-users"],
@@ -57,6 +59,15 @@ export function AdminDashboard() {
     mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) =>
       api.put(`/admin/users/${id}`, payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["admin-users"] }),
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: (id: string) => api.del(`/admin/users/${id}`),
+    onSuccess: (_, id) => {
+      if (selectedUserId === id) setSelectedUserId(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    onError: (err) => alert(err instanceof ApiError ? err.message : "Delete failed."),
   });
 
   const resetPassword = useMutation({
@@ -270,8 +281,9 @@ export function AdminDashboard() {
                           View <ChevronRight size={11} />
                         </button>
                         <button
-                          onClick={() => {
-                            if (confirm(`Reset the password for ${u.email}?`)) resetPassword.mutate(u.id);
+                          onClick={async () => {
+                            const ok = await confirm({ message: `Reset the password for ${u.email}?`, confirmLabel: "Reset", variant: "warning" });
+                            if (ok) resetPassword.mutate(u.id);
                           }}
                           disabled={resetPassword.isPending}
                           title="Reset password"
@@ -279,6 +291,19 @@ export function AdminDashboard() {
                         >
                           <KeyRound size={11} /> Reset
                         </button>
+                        {!u.is_admin && (
+                          <button
+                            onClick={async () => {
+                              const ok = await confirm({ title: "Delete User", message: `Permanently delete ${u.full_name || u.email} and all their data? This cannot be undone.`, confirmLabel: "Delete", variant: "danger" });
+                              if (ok) deleteUser.mutate(u.id);
+                            }}
+                            disabled={deleteUser.isPending}
+                            title="Delete user"
+                            className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2.5 py-1 text-[11px] font-semibold text-red-500 hover:bg-red-50 hover:border-red-300 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-500/10"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
