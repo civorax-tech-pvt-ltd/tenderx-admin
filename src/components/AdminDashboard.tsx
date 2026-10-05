@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Download, FileText, KeyRound, Shield, Trash2, Users, X, ChevronRight, Clock, Activity } from "lucide-react";
+import { Check, Download, FileText, KeyRound, Mail, Shield, Trash2, Users, X, ChevronRight, Clock, Activity } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { useConfirm } from "@/components/ui/ConfirmDialog";
@@ -348,6 +348,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 function UserDataPanel({ user, onClose }: { user: AdminUser; onClose: () => void }) {
   const queryClient = useQueryClient();
+  const [newEmail, setNewEmail] = useState("");
+  const [emailSaved, setEmailSaved] = useState(false);
   const { data: drafts } = useQuery({
     queryKey: ["admin-user-drafts", user.id],
     queryFn: () => api.get<AdminDraftSummary[]>(`/admin/users/${user.id}/drafts`),
@@ -392,6 +394,16 @@ function UserDataPanel({ user, onClose }: { user: AdminUser; onClose: () => void
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     },
     onError: (err) => alert(err instanceof ApiError ? err.message : "Verify failed."),
+  });
+
+  const changeEmail = useMutation({
+    mutationFn: (email: string) => api.put(`/admin/users/${user.id}/email`, { email }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      setEmailSaved(true);
+      setNewEmail("");
+    },
+    onError: (err) => alert(err instanceof ApiError ? err.message : "Failed to change email."),
   });
 
   const generate = useMutation({
@@ -445,6 +457,38 @@ function UserDataPanel({ user, onClose }: { user: AdminUser; onClose: () => void
         </div>
 
         <div className="flex flex-col gap-6 p-5">
+          {/* Change Email */}
+          <section>
+            <SectionLabel>Change Email Address</SectionLabel>
+            <div className="rounded-xl border border-ink-100 p-4 dark:border-ink-800">
+              <p className="mb-2 text-[11px] text-ink-400">
+                Current: <span className="font-medium text-ink-600 dark:text-ink-300">{user.email}</span>
+              </p>
+              {emailSaved && (
+                <p className="mb-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400">
+                  Email updated. Notices sent to both addresses.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => { setNewEmail(e.target.value); setEmailSaved(false); }}
+                  placeholder="new@example.com"
+                  className="h-8 flex-1 rounded-lg border border-ink-200 bg-white px-2.5 text-sm outline-none focus:border-brand-500 dark:border-ink-700 dark:bg-ink-950 dark:text-ink-100"
+                />
+                <button
+                  onClick={() => newEmail && changeEmail.mutate(newEmail)}
+                  disabled={!newEmail || changeEmail.isPending}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                >
+                  <Mail size={12} />
+                  {changeEmail.isPending ? "Saving…" : "Update"}
+                </button>
+              </div>
+            </div>
+          </section>
+
           {/* Drafts */}
           <section>
             <SectionLabel>Drafts ({drafts?.length ?? 0})</SectionLabel>
