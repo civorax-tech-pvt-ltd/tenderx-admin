@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Check, QrCode, X, CreditCard, Clock, CheckCircle2, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, ApiError, API_URL, getToken } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 
@@ -21,6 +21,27 @@ type Invoice = {
   verified_at: string | null;
   created_at: string;
 };
+
+function QrPreview() {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(`${API_URL}/admin/settings/qr-code/image`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    })
+      .then((r) => (r.ok ? r.blob() : Promise.reject()))
+      .then((blob) => setSrc(URL.createObjectURL(blob)))
+      .catch(() => {});
+  }, []);
+
+  if (!src) return <div className="h-36 w-36 animate-pulse rounded-lg bg-ink-100 dark:bg-ink-800" />;
+  return (
+    <img
+      src={src}
+      alt="Payment QR Code"
+      className="h-36 w-36 rounded-lg border border-ink-200 object-contain dark:border-ink-700"
+    />
+  );
+}
 
 const STATUS_FILTERS = ["submitted", "pending", "verified", "rejected", "all"] as const;
 
@@ -126,26 +147,33 @@ export function BillingQueue() {
 
       <main className="mx-auto max-w-4xl space-y-6 p-6">
         {/* QR Code card */}
-        <div className="flex items-center justify-between rounded-xl border border-ink-200 bg-white px-5 py-4 shadow-sm dark:border-ink-800 dark:bg-ink-900">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
-              <QrCode size={20} />
-            </span>
-            <div>
-              <p className="text-sm font-semibold text-ink-900 dark:text-ink-100">Payment QR Code</p>
-              <p className="text-xs text-ink-400">
-                {qrInfo?.qr_code_configured ? "Currently set — shown on every user invoice screen." : "Not configured yet."}
-              </p>
+        <div className="rounded-xl border border-ink-200 bg-white shadow-sm dark:border-ink-800 dark:bg-ink-900">
+          <div className="flex items-center justify-between px-5 py-4">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400">
+                <QrCode size={20} />
+              </span>
+              <div>
+                <p className="text-sm font-semibold text-ink-900 dark:text-ink-100">Payment QR Code</p>
+                <p className="text-xs text-ink-400">
+                  {qrInfo?.qr_code_configured ? "Currently set — shown on every user invoice screen." : "Not configured yet."}
+                </p>
+              </div>
             </div>
+            <button
+              onClick={() => qrInputRef.current?.click()}
+              disabled={uploadQr.isPending}
+              className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+            >
+              <QrCode size={13} />
+              {uploadQr.isPending ? "Uploading…" : qrInfo?.qr_code_configured ? "Replace QR" : "Upload QR"}
+            </button>
           </div>
-          <button
-            onClick={() => qrInputRef.current?.click()}
-            disabled={uploadQr.isPending}
-            className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
-          >
-            <QrCode size={13} />
-            {uploadQr.isPending ? "Uploading…" : qrInfo?.qr_code_configured ? "Replace QR" : "Upload QR"}
-          </button>
+          {qrInfo?.qr_code_configured && (
+            <div className="border-t border-ink-100 px-5 py-4 dark:border-ink-800">
+              <QrPreview />
+            </div>
+          )}
           <input
             ref={qrInputRef}
             type="file"
